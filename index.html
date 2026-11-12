@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YORA WhatsApp Campaign Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#eef2f4;--surface:#fff;--ink:#12262e;--muted:#5d727b;--line:#d5dee2;--brand:#0b6e5c;--brand-d:#08503f;--hl:#ffe27a;--bad:#b3341f;--ok:#1d7a4b}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1a1f;--surface:#15262d;--ink:#e8f0f2;--muted:#93a9b1;--line:#27404a;--brand:#27b497;--brand-d:#4fd0b4;--hl:#5a4b12;--bad:#ff8c78;--ok:#5fd394}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;line-height:1.5}
+.wrap{max-width:880px;margin:0 auto;padding:24px 16px 80px}
+h1{font-size:1.6rem;font-weight:800;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0 0 24px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+h2{font-size:1rem;font-weight:700;margin:0 0 12px}
+label{display:block;font-weight:500;font-size:.9rem;margin-bottom:6px}
+input[type=file],textarea{width:100%;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+textarea{min-height:150px;resize:vertical}
+button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:11px 18px;cursor:pointer;background:var(--brand);color:#fff}
+button:hover{background:var(--brand-d)}
+button.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.alt:hover{background:var(--bg)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.hint{font-size:.85rem;color:var(--muted);margin:8px 0 0}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.chips button{padding:5px 10px;font-size:.8rem;font-weight:500}
+.stats{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:10px;font-size:.9rem}
+.stats b{font-size:1.3rem;display:block}
+.bar{height:10px;background:var(--bg);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;width:0;background:var(--brand);transition:width .25s}
+.now{background:var(--hl);border-radius:10px;padding:14px;margin:14px 0}
+.now .nm{font-weight:800;font-size:1.15rem}
+.preview{white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px;font-size:.9rem;color:var(--ink)}
+.list{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:var(--surface)}
+tr.cur td{background:var(--hl)}
+.s-sent{color:var(--ok);font-weight:700}.s-skip{color:var(--muted)}.s-bad{color:var(--bad);font-weight:700}
+.msg{font-size:.9rem;margin-top:10px}.msg.err{color:var(--bad)}
+.hide{display:none}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>YORA WhatsApp Campaign Manager</h1>
+  <p class="sub">Upload your customers, write one message, then send chat by chat.</p>
+
+  <div class="card">
+    <h2>1. Add your customers</h2>
+    <label for="file">Excel or CSV file (name and phone number columns)</label>
+    <input type="file" id="file" accept=".xlsx,.xls,.csv">
+    <p class="hint">Or paste them below, one per line: <code>Name, 08031234567</code></p>
+    <textarea id="paste" style="min-height:80px" placeholder="Aisha, 08031234567&#10;Musa, 09012345678"></textarea>
+    <div class="row" style="margin-top:10px"><button class="alt" id="loadPaste">Add pasted numbers</button><button class="alt" id="clearAll">Clear everything</button></div>
+    <div class="msg" id="loadMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Write your message</h2>
+    <label for="message">Message</label>
+    <textarea id="message">Hello {name}, this is Yora. You are still part of our community! Order food, medicine, dispatch and more from restaurants, pharmacies and stores around you, straight on WhatsApp.
+
+Reply to this message to place an order.
+
+Reply STOP if you do not want updates.</textarea>
+    <div class="chips"><button class="alt" id="insName">Insert {name}</button></div>
+    <p class="hint"><code>{name}</code> becomes each customer's name. If a name is missing, it becomes "there".</p>
+  </div>
+
+  <div class="card" id="campaign">
+    <h2>3. Send the campaign</h2>
+    <div class="stats">
+      <div><b id="nTotal">0</b>Customers</div>
+      <div><b id="nSent">0</b>Sent</div>
+      <div><b id="nLeft">0</b>Left</div>
+      <div><b id="nBad">0</b>Invalid numbers</div>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+
+    <div class="now hide" id="now">
+      <div>Now sending to</div>
+      <div class="nm" id="nowName"></div>
+      <div id="nowPhone"></div>
+      <div class="preview" id="nowMsg"></div>
+    </div>
+
+    <div class="row">
+      <button id="start">Start campaign</button>
+      <button id="next" class="hide">Next customer</button>
+      <button id="reopen" class="alt hide">Open this chat again</button>
+      <button id="skip" class="alt hide">Skip</button>
+      <button id="back" class="alt hide">Previous</button>
+    </div>
+    <p class="hint">In WhatsApp, press Send, then come back to this page and tap Next customer. Your progress is saved on this device, so you can stop and continue later.</p>
+    <div class="msg err hide" id="popupMsg">Your browser blocked the WhatsApp window. Allow pop-ups for this page, then tap Open this chat again.</div>
+  </div>
+
+  <div class="card">
+    <h2>Customer list</h2>
+    <div class="row" style="margin-bottom:10px"><button class="alt" id="resetStatus">Reset progress</button><button class="alt" id="exportCsv">Download list with status</button></div>
+    <div class="list"><table><thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="msg" id="emptyMsg">No customers yet. Upload a file or paste numbers above.</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var KEY='yora_campaign_v1';
+  var state={contacts:[],index:-1,message:''};
+  var $=function(id){return document.getElementById(id)};
+
+  function save(){try{state.message=$('message').value;localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+  function load(){try{var s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&s.contacts){state=s;if(s.message)$('message').value=s.message}}catch(e){}}
+
+  // Nigerian-friendly phone cleaning. Returns international digits or '' if invalid.
+  function cleanPhone(raw){
+    var d=String(raw==null?'':raw).replace(/[^\d]/g,'');
+    if(!d)return '';
+    if(d.indexOf('00')===0)d=d.slice(2);
+    if(d.indexOf('234')===0&&d.length===13)return d;
+    if(d.charAt(0)==='0'&&d.length===11)return '234'+d.slice(1);
+    if(d.length===10&&/^[789]/.test(d))return '234'+d;
+    if(d.length>=11&&d.length<=15&&d.charAt(0)!=='0')return d;
+    return '';
+  }
+
+  function addContacts(list){
+    var seen={};state.contacts.forEach(function(c){if(c.phone)seen[c.phone]=1});
+    var added=0,dupes=0;
+    list.forEach(function(it){
+      var p=cleanPhone(it.phone);
+      if(p&&seen[p]){dupes++;return}
+      if(p)seen[p]=1;
+      state.contacts.push({name:String(it.name||'').trim(),phone:p,raw:String(it.phone||''),status:p?'pending':'invalid'});
+      added++;
+    });
+    state.index=-1;save();render();
+    return {added:added,dupes:dupes};
+  }
+
+  function pickColumns(rows){
+    // rows: array of arrays. Detect header row and the name/phone columns.
+    if(!rows.length)return [];
+    var head=rows[0].map(function(h){return String(h||'').toLowerCase()});
+    var nameCol=-1,phoneCol=-1,start=0;
+    head.forEach(function(h,i){
+      if(nameCol<0&&/name/.test(h))nameCol=i;
+      if(phoneCol<0&&/(phone|mobile|number|whatsapp|tel|contact)/.test(h))phoneCol=i;
+    });
+    if(nameCol>=0||phoneCol>=0)start=1;
+    if(phoneCol<0){ // find the column that looks like phone numbers
+      var best=-1,score=0,cols=Math.max.apply(null,rows.slice(0,20).map(function(r){return r.length}));
+      for(var c=0;c<cols;c++){var s=0;rows.slice(start,start+20).forEach(function(r){if(cleanPhone(r[c]))s++});if(s>score){score=s;best=c}}
+      phoneCol=best;
+    }
+    if(nameCol<0)nameCol=phoneCol===0?1:0;
+    if(phoneCol<0)return [];
+    return rows.slice(start).filter(function(r){return r&&r.length}).map(function(r){
+      return {name:nameCol===phoneCol?'':r[nameCol],phone:r[phoneCol]};
+    });
+  }
+
+  function report(res,label){
+    var m=$('loadMsg');m.className='msg';
+    m.textContent=label+': added '+res.added+' customers'+(res.dupes?', skipped '+res.dupes+' duplicates':'')+'.';
+  }
+
+  $('file').addEventListener('change',function(e){
+    var f=e.target.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(ev){
+      try{
+        var wb=XLSX.read(ev.target.result,{type:'array'});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+        var list=pickColumns(rows);
+        if(!list.length){var m=$('loadMsg');m.className='msg err';m.textContent='No phone numbers found. Check that your file has a column of phone numbers.';return}
+        report(addContacts(list),f.name);
+      }catch(err){var m=$('loadMsg');m.className='msg err';m.textContent='Could not read that file. Save it as .xlsx or .csv and try again.'}
+    };
+    r.readAsArrayBuffer(f);
+    e.target.value='';
+  });
+
+  $('loadPaste').addEventListener('click',function(){
+    var lines=$('paste').value.split(/\r?\n/).map(function(l){return l.trim()}).filter(Boolean);
+    var list=lines.map(function(l){
+      var parts=l.split(/[,;\t]/).map(function(x){return x.trim()});
+      if(parts.length===1)return {name:'',phone:parts[0]};
+      var a=cleanPhone(parts[0]);
+      return a?{name:parts[1],phone:parts[0]}:{name:parts[0],phone:parts[1]};
+    });
+    if(!list.length)return;
+    report(addContacts(list),'Pasted list');
+    $('paste').value='';
+  });
+
+  $('insName').addEventListener('click',function(){
+    var t=$('message'),s=t.selectionStart,e=t.selectionEnd;
+    t.value=t.value.slice(0,s)+'{name}'+t.value.slice(e);
+    t.focus();t.selectionStart=t.selectionEnd=s+6;save();render();
+  });
+  $('message').addEventListener('input',function(){save();renderNow()});
+
+  function buildMessage(c){
+    var first=(c.name||'').split(/\s+/)[0]||'there';
+    return $('message').value.replace(/\{name\}/gi,first);
+  }
+  function link(c){return 'https://wa.me/'+c.phone+'?text='+encodeURIComponent(buildMessage(c))}
+
+  function nextPendingFrom(i){
+    for(var k=i;k<state.contacts.length;k++){if(state.contacts[k].status==='pending'||state.contacts[k].status==='skipped')return k}
+    return -1;
+  }
+  function openCurrent(){
+    var c=state.contacts[state.index];if(!c||!c.phone)return;
+    var w=window.open(link(c),'_blank');
+    $('popupMsg').classList.toggle('hide',!!w);
+  }
+
+  $('start').addEventListener('click',function(){
+    if(!$('message').value.trim()){alert('Write your message first.');return}
+    var i=nextPendingFrom(0);
+    if(i<0){alert('No customers left to message. Add more or reset progress.');return}
+    state.index=i;save();render();openCurrent();
+  });
+  $('next').addEventListener('click',function(){
+    var c=state.contacts[state.index];
+    if(c)c.status='sent';
+    var i=nextPendingFrom(state.index+1);
+    if(i<0){state.index=-1;save();render();alert('Campaign finished. Every customer has been handled.');return}
+    state.index=i;save();render();openCurrent();
+  });
+  $('skip').addEventListener('click',function(){
+    var c=state.contacts[state.index];if(c)c.status='skipped';
+    var i=nextPendingFrom(state.index+1);
+    if(i<0){state.index=-1;save();render();return}
+    state.index=i;save();render();openCurrent();
+  });
+  $('back').addEventListener('click',function(){
+    for(var k=state.index-1;k>=0;k--){if(state.contacts[k].phone){state.index=k;state.contacts[k].status='pending';save();render();openCurrent();return}}
+  });
+  $('reopen').addEventListener('click',openCurrent);
+
+  $('resetStatus').addEventListener('click',function(){
+    if(!confirm('Mark all customers as not sent yet?'))return;
+    state.contacts.forEach(function(c){c.status=c.phone?'pending':'invalid'});state.index=-1;save();render();
+  });
+  $('clearAll').addEventListener('click',function(){
+    if(!confirm('Remove all customers and progress?'))return;
+    state.contacts=[];state.index=-1;save();render();$('loadMsg').textContent='';
+  });
+  $('exportCsv').addEventListener('click',function(){
+    var csv='Name,Phone,Status\n'+state.contacts.map(function(c){
+      return '"'+(c.name||'').replace(/"/g,'""')+'","'+(c.phone||c.raw)+'",'+c.status;
+    }).join('\n');
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+    a.download='yora-campaign-status.csv';a.click();
+  });
+
+  function esc(s){return String(s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]})}
+
+  function renderNow(){
+    var c=state.contacts[state.index];
+    $('now').classList.toggle('hide',!c);
+    if(!c)return;
+    $('nowName').textContent=c.name||'(no name)';
+    $('nowPhone').textContent='+'+c.phone;
+    $('nowMsg').textContent=buildMessage(c);
+  }
+
+  function render(){
+    var cs=state.contacts,total=cs.length;
+    var sent=cs.filter(function(c){return c.status==='sent'}).length;
+    var bad=cs.filter(function(c){return c.status==='invalid'}).length;
+    var valid=total-bad;
+    $('nTotal').textContent=total;$('nSent').textContent=sent;
+    $('nLeft').textContent=cs.filter(function(c){return c.status==='pending'||c.status==='skipped'}).length;
+    $('nBad').textContent=bad;
+    $('barFill').style.width=(valid?Math.round(sent/valid*100):0)+'%';
+    var running=state.index>=0&&cs[state.index];
+    $('start').classList.toggle('hide',!!running);
+    ['next','reopen','skip','back'].forEach(function(id){$(id).classList.toggle('hide',!running)});
+    $('start').textContent=sent>0?'Continue campaign':'Start campaign';
+    $('emptyMsg').classList.toggle('hide',total>0);
+    $('rows').innerHTML=cs.map(function(c,i){
+      var cls=c.status==='sent'?'s-sent':c.status==='invalid'?'s-bad':c.status==='skipped'?'s-skip':'';
+      var label={sent:'Sent',pending:'Waiting',skipped:'Skipped',invalid:'Invalid number'}[c.status];
+      return '<tr'+(i===state.index?' class="cur"':'')+'><td>'+(i+1)+'</td><td>'+esc(c.name||'')+'</td><td>'+esc(c.phone?'+'+c.phone:c.raw)+'</td><td class="'+cls+'">'+label+'</td></tr>';
+    }).join('');
+    var cur=document.querySelector('tr.cur');if(cur)cur.scrollIntoView({block:'nearest'});
+    renderNow();
+  }
+
+  load();render();
+})();
+</script>
+</body>
+</html>
